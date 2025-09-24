@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HandCalc</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #f0f0f0;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #007bff;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .model-status {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .model-status.success {
+            color: #28a745;
+        }
+
+        .model-status.error {
+            color: #dc3545;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 30px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            margin-right: 10px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #fff;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .tab.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .tab:hover {
+            background-color: #f0f0f0;
+        }
+
+        .upload-section {
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        .file-input {
+            margin-right: 10px;
+        }
+
+        .submit-btn {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .submit-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .preview {
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        .preview img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .operation,
+        .result {
+            margin-bottom: 20px;
+        }
+
+        .operation h3,
+        .result h3 {
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+
+        .canvas-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>HandCalc</h1>
+
+        <div class="model-status" id="modelStatus"
+            :class="{'success': modelStatus === 'Model loaded successfully!', 'error': modelStatus !== 'Model loaded successfully!'}">
+            {{ modelStatus }}
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-mode="basic" @click="switchMode">Basic Calculator</div>
+            <div class="tab" data-mode="linear" @click="switchMode">Linear Equations</div>
+        </div>
+
+        <div class="upload-section">
+            <form id="uploadForm">
+                <input type="file" id="imageInput" accept="image/*" class="file-input">
+                <button type="submit" class="submit-btn">Process Image</button>
+            </form>
+        </div>
+
+        <!-- Canvas drawing section -->
+        <div class="canvas-container">
+            <h3>Draw on Canvas</h3>
+            <canvas id="drawingCanvas" width="400" height="400"></canvas>
+            <br>
+            <div class="canvas-controls">
+                <button id="clearCanvas" class="submit-btn">Clear Canvas</button>
+                <button id="processCanvas" class="submit-btn">Process Drawing</button>
+                <input type="range" id="brushSize" min="1" max="20" value="5" class="brush-size-slider">
+                <label for="brushSize">Brush Size: <span id="brushSizeLabel">5</span></label>
+            </div>
+        </div>
+
+        <div class="results" id="results">
+            <div class="preview">
+                <h3>Original Image</h3>
+                <img id="imagePreview" src="" alt="Preview" style="display: none;">
+            </div>
+            <div class="operation">
+                <h3>Detected Operation:</h3>
+                <p id="detectedOperation"></p>
+            </div>
+            <div class="result">
+                <h3>Result:</h3>
+                <p id="calculationResult"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'basic';
+
+        // Switch mode function
+        function switchMode(event) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            currentMode = event.target.dataset.mode;
+            document.getElementById('detectedOperation').textContent = '';
+            document.getElementById('calculationResult').textContent = '';
+            document.getElementById('imagePreview').style.display = 'none';
+        }
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', switchMode);
+        });
+
+        // Image preview
+        document.getElementById('imageInput').addEventListener('change', function (e) {
+            const preview = document.getElementById('imagePreview');
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Form submission
+        document.getElementById('uploadForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const formData = new FormData();
+            const fileInput = document.getElementById('imageInput');
+            if (fileInput.files.length === 0) {
+                alert('Please select an image first');
+                return;
+            }
+            formData.append('file', fileInput.files[0]);
+            formData.append('mode', currentMode);
+            processImage(formData);
+        });
+
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let brushSize = 5;
+
+        // Function to handle touch events
+        function handleTouchEvent(e) {
+            e.preventDefault(); // Prevent default scrolling behavior
+            
+            if (e.type === 'touchstart') {
+                isDrawing = true;
+                lastX = e.touches[0].clientX - canvas.getBoundingClientRect().left;
+                lastY = e.touches[0].clientY - canvas.getBoundingClientRect().top;
+            } else if (e.type === 'touchmove') {
+                if (!isDrawing) return;
+                
+                const x = e.touches[0].clientX - canvas.getBoundingClientRect().left;
+                const y = e.touches[0].clientY - canvas.getBoundingClientRect().top;
+                
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(x, y);
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = brushSize;
+                ctx.stroke();
+                
+                lastX = x;
+                lastY = y;
+            } else if (e.type === 'touchend') {
+                isDrawing = false;
+            }
+        }
+
+        canvas.addEventListener('touchstart', handleTouchEvent);
+        canvas.addEventListener('touchmove', handleTouchEvent);
+        canvas.addEventListener('touchend', handleTouchEvent);
+
+        document.getElementById('clearCanvas').addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        document.getElementById('brushSize').addEventListener('input', (e) => {
+            brushSize = e.target.value;
+            document.getElementById('brushSizeLabel').textContent = brushSize;
+        });
+
+        document.getElementById('processCanvas').addEventListener('click', async () => {
+            // Create a temporary canvas to draw the white background
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+
+            // Fill the temporary canvas with white background
+            tempCtx.fillStyle = '#ffffff';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            // Draw the original canvas content on top of the white background
+            tempCtx.drawImage(canvas, 0, 0);
+
+            // Convert the temporary canvas to data URL
+            const dataURL = tempCanvas.toDataURL('image/png');
+            const blob = await (await fetch(dataURL)).blob();
+            const formData = new FormData();
+            formData.append('file', blob, 'drawing.png');
+            formData.append('mode', currentMode);
+            processImage(formData);
+        });
+
+        // Process image function
+        async function processImage(formData) {
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('detectedOperation').textContent = data.operation;
+                    if (typeof data.result === 'object') {
+                        let resultText = '';
+                        for (const [variable, value] of Object.entries(data.result)) {
+                            resultText += `${variable} = ${value}\n`;
+                        }
+                        document.getElementById('calculationResult').textContent = resultText;
+                    } else {
+                        document.getElementById('calculationResult').textContent = data.result;
+                    }
+                } else {
+                    alert(data.error || 'An error occurred');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while processing the image');
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,9 @@
+keras==2.9.0
+ipykernel
+opencv-python
+numpy==1.26.4
+pandas
+tensorflow==2.9.0
+pillow
+sympy
+matplotlib
